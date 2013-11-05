@@ -2,7 +2,7 @@
 import System.Environment
 import Data.IORef
 import Text.ParserCombinators.Parsec
-import Graphics.UI.Gtk
+--import Graphics.UI.Gtk
 import Control.Monad
 
 -- Uma variavel, é um tipo assoc a um nome
@@ -39,7 +39,7 @@ data Term = Number Integer
           | MsclaOp Op Term Term
           | Let MsclaVar Term
           | App Term Term
-         
+          | BoundVar String          
             
 instance Show Term where
   show (Number x) = (show x)
@@ -152,6 +152,9 @@ parseExpr = parseNumber
                 t2 <- parseExpr
                 spaces
                 return $ MsclaOp op t1 t2)
+						<|>
+            (do theName <- many (letter <|> digit)  -- NAO COMPILA
+						    return $ BoundVar theName )
 
               
 readExpr :: String -> String
@@ -176,10 +179,10 @@ main = putStrLn $ show $ readExpr ("+ 1 1")
 -}
 
 
-{-
+
 main :: IO ()
-main = putStrLn $ show $ readExpr "xn x:int => (( if true then (if true then true else false) else true ) + 1)"
--}
+main = putStrLn $ show $ readExpr "xn x:int => + x 1"
+
 
 {-
 main :: IO ()
@@ -204,6 +207,25 @@ doOperation theOp (Number t1) (Number t2) = case theOp of
   MsclaPlus  -> Number $ t1 + t2
   MsclaMinus -> Number $ t1 - t2
   
+isInContext :: [MsclaVar]->Term->Bool
+isInContext [] _ = False
+isInContext ((Var theName theType):xs) (BoundVar theBoundVarName) = case theName == theBoundVarName of
+                                                                  True  -> True
+                                                                  False -> isInContext xs (BoundVar theBoundVarName)
+
+-- Tentando fazer currying, substitui apenas o primeiro termo explicitado na "lista" de contexto
+-- TODO pensar em funcoes
+subs :: Term->Term->[MsclaVar]->Term
+subs _ (Number n) _ = Number n
+subs _ T _ = T
+subs _ F _ = F
+subs theTerm (MsclaOp theOp term1 term2) context = MsclaOp theOp (subs theTerm term1 context) (subs theTerm term2 context)
+subs theTerm (If term1 term2 term3) c = If (subs theTerm term1 c) (subs theTerm term2 c) (subs theTerm term3 c)
+subs theTerm (Let letVar term) c = Let letVar $ subs theTerm term c
+subs theTerm (BoundVar varName) ((Var cVarName _ ):xs) = case varName == cVarName of -- Cheguei no termo x e x é o primeiro arg
+																											 True  -> theTerm
+																											 False -> (BoundVar varName)
+ 
   
 step :: Term -> Maybe Term  -- executa um passo da avaliação do programa
 step T = Nothing
@@ -218,3 +240,4 @@ step (If F t2 t3) = Just t3
 step (If t1 t2 t3) = case step t1 of
                       Nothing -> Nothing
                       Just t1' -> Just $ If t1' t2 t3
+

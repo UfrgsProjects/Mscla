@@ -19,8 +19,6 @@ instance Show MsclaType where
   show (MsclaInt) = "int"
   show (MsclaBool) = "bool"
 
-data Bool = True
-          | False
 
 -- Conjunto de operacoes
 data Op = MsclaPlus 
@@ -44,7 +42,7 @@ data Term = Number Integer
          
             
 instance Show Term where
-  show (Number x) = (show x)++"tchau"
+  show (Number x) = (show x)
   show (If x y z) = "(if "++(show x)++" then "++(show y)++" else "++(show z)++")"
   show (Fun x y) = "fn "++(show x)++" => "++(show y)
   show (MsclaOp op term1 term2) = ((show term1)++" "++(show op)++" "++(show term2)++"oi")
@@ -95,7 +93,9 @@ parseOp = do theSymbol <- many (symbol)
                         
               
 parseExpr :: Parser Term
-parseExpr = (do string "if"
+parseExpr = parseNumber
+            <|>
+            (do string "if"
                 spaces
                 t1 <- parseExpr
                 spaces
@@ -136,7 +136,7 @@ parseExpr = (do string "if"
                 t2 <- parseExpr
                 spaces
                 return $ Fun t1 t2)
-            <|> 
+            <|>
             (do string "("    
                 spaces
                 t <- parseExpr
@@ -145,17 +145,14 @@ parseExpr = (do string "if"
                 spaces
                 return $ t)
             <|>
-            (do t1 <- parseExpr
+            (do op <- parseOp
                 spaces
-                op <- parseOp
+                t1 <- parseExpr
                 spaces
                 t2 <- parseExpr
                 spaces
                 return $ MsclaOp op t1 t2)
-            <|>
-            	parseNumber
-            
-            
+
               
 readExpr :: String -> String
 readExpr input = case parse parseExpr "mscla" input of
@@ -173,10 +170,10 @@ main = do args <- getArgs
           putStrLn (readExpr (args !! 0))
 -}
 
-
+{-
 main :: IO ()
-main = putStrLn $ show $ readExpr ("1 + 1")
-
+main = putStrLn $ show $ readExpr ("+ 1 1")
+-}
 
 
 {-
@@ -188,3 +185,36 @@ main = putStrLn $ show $ readExpr "xn x:int => (( if true then (if true then tru
 main :: IO ()
 main = putStrLn $ show $ readOp "1 + 1"
 -}
+
+
+nv :: Term -> Bool
+nv (Number _) = True
+nv _ = False
+
+value :: Term -> Bool  -- testa se termo é valor
+value T = True
+value F = True
+value x | nv x      = True
+        | otherwise = False
+
+
+-- Esqueleto, fazer também op's booleanas == > <
+doOperation :: Op->Term->Term->Term
+doOperation theOp (Number t1) (Number t2) = case theOp of
+  MsclaPlus  -> Number $ t1 + t2
+  MsclaMinus -> Number $ t1 - t2
+  
+  
+step :: Term -> Maybe Term  -- executa um passo da avaliação do programa
+step T = Nothing
+step F = Nothing
+step (Number _) = Nothing
+step (MsclaOp op term1 term2)
+  | nv term1 && nv term2 = Just $ doOperation op term1 term2
+  | nv term1 = step term2
+  | otherwise = step term1
+step (If T t2 t3) = Just t2
+step (If F t2 t3) = Just t3
+step (If t1 t2 t3) = case step t1 of
+                      Nothing -> Nothing
+                      Just t1' -> Just $ If t1' t2 t3
